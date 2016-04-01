@@ -18,6 +18,7 @@ import os
 import sys
 
 from _line_profiler import LineProfiler as CLineProfiler
+from _line_profiler import LineStats
 
 # Python 2/3 compatibility utils
 # ===========================================================
@@ -385,10 +386,38 @@ def main():
     parser = optparse.OptionParser(usage=usage, version='%prog 1.0b2')
 
     options, args = parser.parse_args()
-    if len(args) != 1:
+    if len(args) < 2:
         parser.error("Must provide a filename.")
-    lstats = load_stats(args[0])
-    show_text(lstats.timings, lstats.unit)
+
+    merge_dict = {}
+
+    for arg in args:
+        lstats = load_stats(arg)
+        timing = lstats.timings
+
+        for key in timing:
+            merged_vals = merge_dict.get(key, {})
+            new_vals = timing[key]
+
+            for val in new_vals:
+                inner_val = merged_vals.get(val[0], [0, 0])
+                inner_val[0] += val[1]
+                inner_val[1] += val[2]
+                merged_vals[val[0]] = inner_val
+
+            merge_dict[key] = merged_vals
+
+    new_stats = {}
+    for unit in merge_dict:
+        merged_lines = []
+        for line in merge_dict[unit]:
+            merged_lines.append((line,
+                merge_dict[unit][line][0], merge_dict[unit][line][1]))
+        new_stats.update({unit: merged_lines})
+
+    timing = float(1e-06) # TODO: probably should ensure the timing is the same across all files
+    global_stats = LineStats(new_stats, timing)
+    show_text(global_stats.timings, global_stats.unit)
 
 if __name__ == '__main__':
     main()
